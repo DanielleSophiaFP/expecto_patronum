@@ -14,11 +14,88 @@ import java.time.LocalDate;
 import java.time.DateTimeException;
 
 public class MotorPHGuiZ extends MotorPHGui {
-    private JFrame frame;
+    protected JFrame frame;
     private JPanel sidebar;
     private JTextArea contentArea;
-    private Account currentUser;
+    protected Account currentUser;
 
+    // Polymorphic Interface for Role Dashboards
+    private interface RoleDashboard {
+        void buildSidebar(JPanel sidebar, MotorPHGuiZ app);
+        void setContentArea(JTextArea contentArea);
+    }
+
+    // Admin Dashboard (Polymorphic Implementation)
+    private class AdminDashboard implements RoleDashboard {
+        private JTextArea contentArea;
+
+        @Override
+        public void setContentArea(JTextArea contentArea) {
+            this.contentArea = contentArea;
+        }
+
+        @Override
+        public void buildSidebar(JPanel sidebar, MotorPHGuiZ app) {
+            sidebar.add(app.createSidebarBtn("View All Employees", e -> new EmployeeDataGUI(app).setVisible(true)));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("View Employee Details", e -> app.showEmployeeDetailsPrompt()));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("View Employee Salary", e -> app.showPayrollPrompt()));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("View Employee Payroll", e -> app.showPayrollPrompt()));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("Calculate Payroll", e -> app.showPayrollPrompt()));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("Add New Employee", e -> JOptionPane.showMessageDialog(app.frame, "Add New Employee - Not implemented yet")));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("Update Employee", e -> JOptionPane.showMessageDialog(app.frame, "Update Employee - Not implemented yet")));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("Delete Employee", e -> JOptionPane.showMessageDialog(app.frame, "Delete Employee - Not implemented yet")));
+        }
+    }
+
+    // Manager Dashboard (Polymorphic Implementation)
+    private class ManagerDashboard implements RoleDashboard {
+        private JTextArea contentArea;
+
+        @Override
+        public void setContentArea(JTextArea contentArea) {
+            this.contentArea = contentArea;
+        }
+
+        @Override
+        public void buildSidebar(JPanel sidebar, MotorPHGuiZ app) {
+            sidebar.add(app.createSidebarBtn("View All Employees", e -> new EmployeeDataGUI(app).setVisible(true)));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("View Employee Salary", e -> app.showPayrollPrompt()));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("Calculate Payroll", e -> app.showPayrollPrompt()));
+        }
+    }
+
+    // Employee Dashboard (Polymorphic Implementation)
+    private class EmployeeDashboard implements RoleDashboard {
+        private JTextArea contentArea;
+
+        @Override
+        public void setContentArea(JTextArea contentArea) {
+            this.contentArea = contentArea;
+        }
+
+        @Override
+        public void buildSidebar(JPanel sidebar, MotorPHGuiZ app) {
+            String empID = app.currentUser.getEmployeeID();
+            sidebar.add(app.createSidebarBtn("View My Details", e -> app.showEmployeeDetails(empID)));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("View My Salary", e -> app.showPayrollForSelf()));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("View My Payroll", e -> app.showPayrollForSelf()));
+            sidebar.add(Box.createVerticalStrut(15));
+            sidebar.add(app.createSidebarBtn("Calculate My Payroll", e -> app.showPayrollForSelf()));
+        }
+    }
+
+    // Sidebar Button Style
     private static class SidebarButton extends JButton {
         public SidebarButton(String text) {
             super(text);
@@ -42,6 +119,12 @@ public class MotorPHGuiZ extends MotorPHGui {
                 }
             });
         }
+    }
+
+    public SidebarButton createSidebarBtn(String text, java.awt.event.ActionListener listener) {
+        SidebarButton btn = new SidebarButton(text);
+        btn.addActionListener(listener);
+        return btn;
     }
 
     public static void main(String[] args) {
@@ -133,7 +216,6 @@ public class MotorPHGuiZ extends MotorPHGui {
         JPanel mainPanel = new JPanel(new BorderLayout());
         mainPanel.setBackground(new Color(245, 245, 245));
 
-        // Content area (left)
         contentArea = new JTextArea();
         contentArea.setFont(new Font("Monospaced", Font.PLAIN, 16));
         contentArea.setEditable(false);
@@ -142,31 +224,29 @@ public class MotorPHGuiZ extends MotorPHGui {
         JScrollPane scroll = new JScrollPane(contentArea);
         mainPanel.add(scroll, BorderLayout.CENTER);
 
-        // Sidebar (right)
         sidebar = new JPanel();
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
         sidebar.setBackground(new Color(240, 248, 255));
         sidebar.setBorder(BorderFactory.createEmptyBorder(40, 20, 40, 20));
         sidebar.setPreferredSize(new Dimension(320, 0));
 
-        String role = currentUser.getRole().toLowerCase();
+        // Polymorphism: Select and use the appropriate dashboard
+        RoleDashboard dashboard = switch (currentUser.getRole().toLowerCase()) {
+            case "admin" -> new AdminDashboard();
+            case "manager" -> new ManagerDashboard();
+            default -> new EmployeeDashboard();
+        };
 
-        if ("admin".equals(role)) {
-            addAdminSidebar();
-        } else if ("manager".equals(role)) {
-            addManagerSidebar();
-        } else {
-            addEmployeeSidebar();
-        }
+        dashboard.setContentArea(contentArea);
+        dashboard.buildSidebar(sidebar, this);
 
-        // Logout always at bottom
+        // Logout button
         sidebar.add(Box.createVerticalGlue());
         SidebarButton logout = new SidebarButton("Logout");
         logout.addActionListener(e -> showLoginPanel());
         sidebar.add(logout);
 
         mainPanel.add(sidebar, BorderLayout.EAST);
-
         frame.getContentPane().add(mainPanel);
         frame.revalidate();
         frame.repaint();
@@ -174,50 +254,7 @@ public class MotorPHGuiZ extends MotorPHGui {
         contentArea.setText("Welcome, " + currentUser.getUsername() + "!\n\nSelect an option from the sidebar.");
     }
 
-    private void addAdminSidebar() {
-        sidebar.add(createSidebarBtn("View All Employees", e -> new EmployeeDataGUI(this).setVisible(true)));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("View Employee Details", e -> showEmployeeDetailsPrompt()));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("View Employee Salary", e -> showPayrollPrompt()));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("View Employee Payroll", e -> showPayrollPrompt()));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("Calculate Payroll", e -> showPayrollPrompt()));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("Add New Employee", e -> JOptionPane.showMessageDialog(frame, "Add New Employee - Not implemented yet")));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("Update Employee", e -> JOptionPane.showMessageDialog(frame, "Update Employee - Not implemented yet")));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("Delete Employee", e -> JOptionPane.showMessageDialog(frame, "Delete Employee - Not implemented yet")));
-    }
-
-    private void addManagerSidebar() {
-        sidebar.add(createSidebarBtn("View All Employees", e -> new EmployeeDataGUI(this).setVisible(true)));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("View Employee Salary", e -> showPayrollPrompt()));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("Calculate Payroll", e -> showPayrollPrompt()));
-    }
-
-    private void addEmployeeSidebar() {
-        sidebar.add(createSidebarBtn("View My Details", e -> showEmployeeDetails(currentUser.getEmployeeID())));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("View My Salary", e -> showPayrollForSelf()));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("View My Payroll", e -> showPayrollForSelf()));
-        sidebar.add(Box.createVerticalStrut(15));
-        sidebar.add(createSidebarBtn("Calculate My Payroll", e -> showPayrollForSelf()));
-    }
-
-    private SidebarButton createSidebarBtn(String text, java.awt.event.ActionListener listener) {
-        SidebarButton btn = new SidebarButton(text);
-        btn.addActionListener(listener);
-        return btn;
-    }
-
-    // Prompt for employee ID (admin/manager)
-    private void showPayrollPrompt() {
+    public void showPayrollPrompt() {
         String empID = JOptionPane.showInputDialog(frame, "Enter Employee ID:");
         if (empID != null && !empID.trim().isEmpty() && getPayCalculators().containsKey(empID.trim())) {
             showPayrollDatePicker(empID.trim());
@@ -226,11 +263,10 @@ public class MotorPHGuiZ extends MotorPHGui {
         }
     }
 
-    private void showPayrollForSelf() {
+    public void showPayrollForSelf() {
         showPayrollDatePicker(currentUser.getEmployeeID());
     }
 
-    // Date picker with combo boxes (restored from original code)
     private void showPayrollDatePicker(String empID) {
         LocalDate today = LocalDate.now();
 
@@ -238,7 +274,6 @@ public class MotorPHGuiZ extends MotorPHGui {
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(10, 10, 10, 10);
 
-        // Start Date
         JPanel startPanel = new JPanel(new GridBagLayout());
         startPanel.setBorder(BorderFactory.createTitledBorder("Start Date"));
 
@@ -258,7 +293,6 @@ public class MotorPHGuiZ extends MotorPHGui {
         startPanel.add(new JLabel("Year:"), g); g.gridx++;
         startPanel.add(startYear, g);
 
-        // End Date
         JPanel endPanel = new JPanel(new GridBagLayout());
         endPanel.setBorder(BorderFactory.createTitledBorder("End Date"));
 
@@ -333,7 +367,7 @@ public class MotorPHGuiZ extends MotorPHGui {
         }
     }
 
-    private void showEmployeeDetailsPrompt() {
+    public void showEmployeeDetailsPrompt() {
         String empID = JOptionPane.showInputDialog(frame, "Enter Employee ID:");
         if (empID != null && !empID.trim().isEmpty() && getEmployees().containsKey(empID.trim())) {
             showEmployeeDetails(empID.trim());
@@ -342,7 +376,7 @@ public class MotorPHGuiZ extends MotorPHGui {
         }
     }
 
-    private void showEmployeeDetails(String empID) {
+    public void showEmployeeDetails(String empID) {
         Employee emp = getEmployees().get(empID);
         PayCalculator pc = getPayCalculators().get(empID);
         if (emp == null || pc == null) {
